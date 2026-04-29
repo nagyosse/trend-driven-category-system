@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>Trendvezérelt kategóriaelemző</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      padding: 30px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    .category {
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      background: #fafafa;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+      margin-right: 8px;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .primary {
+      background: #2563eb;
+      color: white;
+    }
+
+    .secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .swarm {
+      background: #16a34a;
+      color: white;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 25px;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+
+    th {
+      background: #f3f4f6;
+    }
+
+    .top {
+      background: #dcfce7;
+    }
+
+    .ai-box {
+      margin-top: 20px;
+      padding: 15px;
+      background: #eef6ff;
+      border-left: 5px solid #2563eb;
+      border-radius: 8px;
+    }
+
+    .recommendation-box {
+      margin-top: 20px;
+      padding: 15px;
+      background: #ecfdf5;
+      border-left: 5px solid #16a34a;
+      border-radius: 8px;
+    }
+
+    .error {
+      color: red;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    .hint {
+      color: #6b7280;
+      font-size: 0.9em;
+    }
+
+    canvas {
+      margin-top: 25px;
+      max-height: 420px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <h1>Trendvezérelt kategóriaelemző</h1>
+
+  <label>Projekt neve</label>
+  <input type="text" id="projectName" value="IPO frontend teszt">
+
+  <div id="categories"></div>
+
+  <button class="secondary" onclick="addCategory()">+ Kategória</button>
+
+  <br><br>
+
+  <label>
+    <input type="checkbox" id="aiEnabled">
+    AI értelmezés
+  </label>
+
+  <label>
+    <input type="checkbox" id="runTrendsFetch">
+    Friss Trends lekérés
+  </label>
+
+  <p class="hint">
+    Megjegyzés: friss Google Trends lekérés esetén az elemzés több percig is futhat.
+  </p>
+
+  <br>
+
+  <button class="primary" onclick="runAnalyze()">Elemzés indítása</button>
+
+  <button class="swarm" onclick="generateSwarmConfig()">
+    Docker Swarm config generálása
+  </button>
+
+  <div id="error" class="error"></div>
+  <div id="result"></div>
+</div>
+
+<script>
+let categoryCount = 0;
+let lastAnalyzeResult = null;
+let chartInstance = null;
+
+function addCategory() {
+  if (categoryCount >= 8) {
+    alert("Maximum 8 kategória adható meg.");
+    return;
+  }
+
+  categoryCount++;
+
+  const div = document.createElement("div");
+  div.className = "category";
+
+  div.innerHTML = `
+    <h3>Kategória ${categoryCount}</h3>
+
+    <label>ID</label>
+    <input type="text" class="category-id" placeholder="notebooks">
+
+    <label>Név</label>
+    <input type="text" class="category-name" placeholder="Notebookok">
+
+    <label>Kulcsszavak (max 4)</label>
+    <input type="text" class="keywords" placeholder="laptop, notebook, ultrabook">
+  `;
+
+  document.getElementById("categories").appendChild(div);
+}
+
+async function runAnalyze() {
+  const btn = document.querySelector(".primary");
+  btn.disabled = true;
+  btn.innerText = "Folyamatban...";
+
+  document.getElementById("error").innerText = "";
+  document.getElementById("result").innerHTML = `
+    <p><strong>⏳ Elemzés fut...</strong></p>
+    <p class="hint">Friss Trends lekérés esetén ez több percet is igénybe vehet.</p>
+  `;
+
+  const blocks = document.querySelectorAll(".category");
+  const categories = [];
+
+  for (const b of blocks) {
+    const id = b.querySelector(".category-id").value.trim();
+    const name = b.querySelector(".category-name").value.trim();
+    const keywords = b.querySelector(".keywords").value
+      .split(",")
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+
+    if (!id || !name || keywords.length === 0) {
+      document.getElementById("result").innerHTML = "";
+      document.getElementById("error").innerText = "Minden kategóriánál ki kell tölteni az ID, név és kulcsszó mezőket.";
+      btn.disabled = false;
+      btn.innerText = "Elemzés indítása";
+      return;
+    }
+
+    if (keywords.length > 4) {
+      document.getElementById("result").innerHTML = "";
+      document.getElementById("error").innerText = "Maximum 4 kulcsszó adható meg kategóriánként.";
+      btn.disabled = false;
+      btn.innerText = "Elemzés indítása";
+      return;
+    }
+
+    categories.push({
+      category_id: id,
+      category_name: name,
+      keywords: keywords
+    });
+  }
+
+  if (categories.length === 0) {
+    document.getElementById("result").innerHTML = "";
+    document.getElementById("error").innerText = "Adj meg legalább egy kategóriát.";
+    btn.disabled = false;
+    btn.innerText = "Elemzés indítása";
+    return;
+  }
+
+  const payload = {
+    project_name: document.getElementById("projectName").value.trim(),
+    ai_enabled: document.getElementById("aiEnabled").checked,
+    run_trends_fetch: document.getElementById("runTrendsFetch").checked,
+    categories: categories
+  };
+
+  try {
+    const res = await fetch("http://localhost:8000/api/v1/analyze", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(JSON.stringify(err));
+    }
+
+    const data = await res.json();
+    renderResult(data);
+
+  } catch (e) {
+    console.error(e);
+    document.getElementById("result").innerHTML = "";
+    document.getElementById("error").innerText = "Hiba: " + e.message;
+  }
+
+  btn.disabled = false;
+  btn.innerText = "Elemzés indítása";
+}
+
+function renderResult(data) {
+  lastAnalyzeResult = data;
+
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
+
+  let html = `
+    <h2>Eredmény</h2>
+    <p><strong>Projekt:</strong> ${data.project_name || "-"}</p>
+    <p><strong>Kategóriák száma:</strong> ${data.category_count}</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Kategória</th>
+          <th>53 hét</th>
+          <th>8 hét</th>
+          <th>Aktív hetek</th>
+          <th>Csúcs</th>
+          <th>Rangpont</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  data.ranking.forEach(r => {
+    const cls = r.final_rank === 1 ? "top" : "";
+
+    html += `
+      <tr class="${cls}">
+        <td>${r.final_rank}</td>
+        <td>${r.category_name}</td>
+        <td>${r.avg_53w}</td>
+        <td>${r.avg_last_8w}</td>
+        <td>${r.active_weeks}</td>
+        <td>${r.peak_value}</td>
+        <td>${r.total_rank_score}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+      </tbody>
+    </table>
+  `;
+
+  if (data.ranking.length > 0) {
+    const top = data.ranking[0];
+
+    html += `
+      <div class="recommendation-box">
+        <h3>Docker Swarm skálázási ajánlás</h3>
+        <p>
+          A jelenlegi trendrangsor alapján a
+          <strong>${top.category_name}</strong> kategória konténerét érdemes erősíteni.
+        </p>
+        <p>
+          Cél szolgáltatás:
+          <code>webshop_${top.category_id}</code>
+        </p>
+      </div>
+    `;
+  }
+
+  html += `<canvas id="chart"></canvas>`;
+
+  if (data.ai_summary) {
+    html += `
+      <div class="ai-box">
+        <h3>AI értelmezés</h3>
+        <p>${data.ai_summary}</p>
+      </div>
+    `;
+  }
+
+  document.getElementById("result").innerHTML = html;
+
+html += `
+  <button class="swarm" onclick="generateSwarmConfig()" style="margin-top:20px;">
+    📦 Docker Swarm config letöltése
+  </button>
+`;
+
+  setTimeout(() => {
+    const ctx = document.getElementById("chart");
+
+    chartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: data.ranking.map(r => r.category_name),
+        datasets: [{
+          label: "8 hetes átlag",
+          data: data.ranking.map(r => r.avg_last_8w)
+        }]
+      }
+    });
+  }, 100);
+}
+
+function generateSwarmConfig() {
+  if (!lastAnalyzeResult || !lastAnalyzeResult.ranking || lastAnalyzeResult.ranking.length === 0) {
+    alert("Előbb futtasd le az elemzést.");
+    return;
+  }
+
+  const topCategory = lastAnalyzeResult.ranking[0];
+
+  const config = {
+    generated_at: new Date().toISOString(),
+    system: "trend-driven-category-system",
+    environment: "docker-swarm",
+    action: "scale_up",
+    category_id: topCategory.category_id,
+    category_name: topCategory.category_name,
+    target_service: `webshop_${topCategory.category_id}`,
+    suggested_replicas: 3,
+    priority: "high",
+    metrics: {
+      avg_53w: topCategory.avg_53w,
+      avg_last_8w: topCategory.avg_last_8w,
+      active_weeks: topCategory.active_weeks,
+      peak_value: topCategory.peak_value,
+      total_rank_score: topCategory.total_rank_score
+    },
+    reason: `A(z) ${topCategory.category_name} kategória az aktuális trendrangsor első helyén szerepel, ezért ennek a Docker Swarm szolgáltatásnak az erősítése javasolt.`
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(config, null, 2)],
+    { type: "application/json" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = `swarm_scale_${topCategory.category_id}.json`;
+  document.body.appendChild(a);
+  a.click();
+
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  addCategory();
+});
+</script>
+
+</body>
+</html>

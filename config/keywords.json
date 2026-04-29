@@ -1,0 +1,10 @@
+{
+  "components": [
+    "videokártya",
+    "processzor"
+  ],
+  "computers": [
+    "asztali számítógép",
+    "gamer pc"
+  ]
+}
