@@ -59,3 +59,52 @@ The system is built around the **Input → Process → Output (IPO)** model.
 ---
 
 ##  System Architecture
+### Components
+
+| Layer      | Description |
+|------------|------------|
+| Frontend   | User interface (input + visualization) |
+| API        | FastAPI endpoints |
+| Services   | Business logic (pipeline orchestration) |
+| Engines    | Deterministic calculations |
+| Database   | Logging & traceability |
+| External   | Google Trends + OpenAI |
+
+---
+
+## Project Structure
+
+app/
+api/
+services/
+engines/
+schemas/
+db/
+clients/
+core/
+
+config/
+data/
+raw/
+processed/
+
+frontend/
+scripts/
+
+Dockerfile
+docker-compose.yml
+requirements.txt
+
+---
+
+## Getting Started
+
+### 1. Clone repository
+### (Optional: add OpenAI API key)
+```bash
+git clone https://github.com/nagyosse/trend-driven-category-system.git
+cd trend-driven-category-system
+cp .env.example .env
+
+docker compose up --build
+
