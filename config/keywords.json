@@ -1,10 +1,12 @@
 {
-  "components": [
-    "videokártya",
-    "processzor"
+  "notebook": [
+    "laptop",
+    "notebook",
+    "ultrabook"
   ],
-  "computers": [
-    "asztali számítógép",
-    "gamer pc"
+  "components": [
+    "cpu",
+    "nvidi",
+    "radeon"
   ]
 }

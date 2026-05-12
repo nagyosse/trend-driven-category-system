@@ -49,15 +49,6 @@ docker-compose.override.yml
 *.sqlite3
 *.db
 
-# =========================
-# Data files (fontos!)
-# =========================
-data/raw/*
-data/processed/*
-data/exports/*
-
-# kivétel: demo fájl maradhat
-!data/raw/trends_long.csv
 
 # =========================
 # IDE / OS

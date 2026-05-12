@@ -366,13 +366,14 @@ function renderResult(data) {
   }
 
 
-
 html += `
   <button class="swarm" onclick="generateSwarmConfig()" style="margin-top:20px;">
     📦 Docker Swarm config letöltése
   </button>
 `;
+
   document.getElementById("result").innerHTML = html;
+
   setTimeout(() => {
     const ctx = document.getElementById("chart");
 
